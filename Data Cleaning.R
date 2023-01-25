@@ -1,0 +1,243 @@
+# Load libraries & functions ----
+library(tidyverse)
+library(readxl)
+library(car)
+library(lubridate)
+
+# Mortality data ----
+
+# Read both the uncoded and coded mortality data
+mortality_coded_read.df <- read_csv("Z:/Mortality data/mos4269_coded.csv",
+                                col_types=cols(
+                                  DATE_OF_DEATH=col_date("%d/%m/%Y")
+                                ))
+mortality_uncoded_read.df <- read_csv("Z:/Mortality data/mos4269_uncoded.csv",
+                                  col_types=cols(
+                                    DATE_OF_DEATH=col_date("%d/%m/%Y")
+                                  ))
+
+# Remove duplicate CLIENTKEY identifier from the uncoded data thereby keeping only the first occurrence
+mortality_uncoded_read.df <- mortality_uncoded_read.df[!duplicated(mortality_uncoded_read.df$CLIENTKEY),]
+
+
+# Create an outer table join to fill details from the coded data
+mortality.df <- merge(mortality_uncoded_read.df, mortality_coded_read.df, 
+                      by=c("CLIENTKEY", "DATE_OF_DEATH", "AGE_AT_DEATH_YRS"), all.x=TRUE)
+
+# Extract meaningful columns from the dataframe
+mortality.df <- mortality.df[ ,c("CLIENTKEY", "DATE_OF_DEATH", "AGE_AT_DEATH_YRS")]
+
+# Memory cleanup for mortality data
+rm(mortality_coded_read.df, mortality_uncoded_read.df)
+
+# COVID case status and immunisation data ----
+
+# Read data as .txt files
+covid_case_status_read.df <- read.delim("Z:/COVID-19 data/Gary Cheung COVID case status.txt")
+covid_immunisation_read.df <- read.delim("Z:/COVID-19 data/Gary Cheung COVID immunisations.txt")
+
+# No duplicates in case status data; proceed to numerate through the number of recorded cases
+covid_case_status_read.df <- covid_case_status_read.df %>%
+  mutate(CASE_REPORT_DT=dmy(CASE_REPORT_DT),
+         INFECTION_STATUS=ifelse(is.na(INFECTION_STATUS), 0, INFECTION_STATUS)) %>%
+  group_by(ClientKey) %>%
+  arrange(ClientKey, CASE_REPORT_DT) %>%
+  summarise(Total_infections=max(INFECTION_STATUS)) %>%
+  ungroup()
+
+# Remove duplicate dates from the immunisation data [COMBINE THE NEXT 3 CHUNKS!]
+covid_immunisation_read.df <- covid_immunisation_read.df %>%
+  # By-group operation
+  group_by(ClientKey) %>%
+  # Keep only the distinct dose numbers
+  distinct(DOSENUMBER, .keep_all=TRUE) %>%
+  # Convert the vaccination as a date-type
+  mutate(VACCINATION_DATE = as.Date(VACCINATION_DATE, format="%d/%m/%Y"),
+         # Ensure the dosenumber for missing data (NA) is 0
+         DOSENUMBER = ifelse(is.na(VACCINATION_DATE), 0, DOSENUMBER),
+         # Gather the number of rows by group which acts as the total number of doses taken
+         Total_vaccination_doses = ifelse(DOSENUMBER>0, n(), DOSENUMBER)) %>%
+  # Hard code the removal of duplicated vaccination records on 2022-08-04 and 5 doses
+  filter(all(!(VACCINATION_DATE=="4/08/2022" & DOSENUMBER == 5))|is.na(VACCINATION_DATE)) %>%
+  # Select one row from each group, including the ClientKey and the total vaccination doses columns
+  slice_sample() %>%
+  select(ClientKey, Total_vaccination_doses) %>%
+  # Ungroup the data
+  ungroup()
+  
+# Merge both the case statuses and immunisation data together
+covid.df <- merge(covid_case_status_read.df, covid_immunisation_read.df, "ClientKey")
+
+# Memory cleanup for COVID data
+rm(covid_case_status_read.df, covid_immunisation_read.df)
+
+# Hospitalisation data  ----
+
+# Read the hospitalisation data
+hospital_read.df <- read_csv("Z:/Hospitalisation data/Hospitalisation data.csv",
+                             col_types=cols(
+                              EVENT_START_DATE=col_date("%d/%m/%Y"),
+                              EVENT_END_DATE=col_date("%d/%m/%Y")
+                             ),
+                             col_select=-OP_ACDTE)
+
+# Re-format the CLINICAL CODE column using the generic ICD-10-CM categories
+hospital_read.df$CLINICAL_CODE <- substr(hospital_read.df$CLINICAL_CODE, 1, 1)
+
+# interRAI data ----
+
+# Initialise the interRAI data whilst removing the day of birth
+interRAI_read.df <- read_csv("Z:/interRAI LTCF downloaded Jan23.csv",
+                             col_types=cols(
+                               Date_Of_Birth=col_date("%d/%m/%Y"),
+                               assessment_date=col_date("%d/%m/%Y")
+                             ))
+interRAI_read.df$Date_Of_Birth <- format(interRAI_read.df$Date_Of_Birth, "%m/%Y")
+interRAI_read.df[c("gender", "Marital_Status", "District", "Ethnicity")] <- 
+  lapply(interRAI_read.df[c("gender", "Marital_Status", "District", "Ethnicity")], factor)
+
+# Re-configure the demographic groups into: (1) European, (2) Māori, (3) Pacific Peoples, (4) Asian, 
+#                                           (5 & 6), Middle Eastern/Latin American/African & Other Ethnicity, (9) Unknown [Residual Categories]
+#                                           This ethnicity code is more consistent with the ones from MoH.
+interRAI_read.df$Ethnicity <- recode(interRAI_read.df$Ethnicity,
+                                     "c('New Zealand European', 'Other European', 'European NFD')='European';
+                                     'Maori'='Māori';
+                                     c('Samoan', 'Cook Island Maori', 'Tongan', 'Niuean', 'Tokelauan', 'Fijian', 'Other Pacific Peoples')='Pacific Peoples';
+                                     c('Asian NFD', 'Southeast Asian', 'Chinese', 'Indian', 'Other Asian')='Asian';
+                                     c('Middle Eastern', 'Latin American', 'African', 'Other Ethnicity')='Middle Eastern/Latin American/African/Others';
+                                     c('Refused to Answer', 'Response Unidentifiable', 'Not stated', 'Dont Know')='Unknown'")
+
+# Re-value the gender category.
+levels(interRAI_read.df$gender) <- c("Female", "Indeterminate", "Male", NA, "Unknown")
+
+# Re-categorise marital status
+interRAI_read.df$Marital_Status <- recode(interRAI_read.df$Marital_Status,
+                                          "c(1, 3, 4, 5, 6)='Other';
+                                          2='Married/Civil union/Defacto'")
+
+# Re-value iJ7: self-rated health values
+interRAI_read.df$iJ7 <- recode(interRAI_read.df$iJ7,
+                               "0='Excellent';
+                               1='Good';
+                               2='Fair';
+                               3='Poor';
+                               8='Could not (would not) respond'")
+
+# Re-value Scale_ADLHierarchy
+interRAI_read.df$Scale_ADLHierarchy <- recode(interRAI_read.df$Scale_ADLHierarchy,
+                                              "0='0 (Independent)';
+                                              c(1, 2)='1-2 (Mild to moderately dependent)';
+                                              c(3, 4, 5, 6)='3-6 (Severely dependent)'")
+
+# Re-value both the "falls" (iJ1) and the "falls in the last 30 days" (iJ1g) columns
+interRAI_read.df$iJ1 <- recode(interRAI_read.df$iJ1,
+                               "c(0, 1)='No falls';
+                               c(2, 3)='≥1 fall'")
+interRAI_read.df$iJ1g <- recode(interRAI_read.df$iJ1g,
+                                "0='No falls';
+                                c(1, 2)='≥1 fall'")
+
+# Coalesce the information from falls in the last 30 days (iJ1g)
+# into the missing values of falls (iJ1)
+interRAI_read.df$iJ1 <- ifelse(interRAI_read.df$iJ1 == "NULL", interRAI_read.df$iJ1g, interRAI_read.df$iJ1)
+
+# Re-value Scale_CPS
+interRAI_read.df$Scale_CPS <- recode(interRAI_read.df$Scale_CPS,
+                                     "0='0 (Intact)';
+                                     c(1, 2)='1-2 (Borderline or mild cognitive impairment)';
+                                     c(3, 4, 5, 6)='3-6 (Moderate to severe cognitive impairment)'")
+
+# Re-value Scale_DRS
+interRAI_read.df$Scale_DRS <- recode(interRAI_read.df$Scale_DRS,
+                                     "c(0, 1, 2)='0-2 (No to minimal)';
+                                     c(3, 4, 5)='3-5 (Moderate)';
+                                     c(6, 7, 8, 9, 10, 11, 12, 13, 14)='6+ (Severe)'")
+
+# Re-value Scale_AggressiveBehaviour
+interRAI_read.df$Scale_AggressiveBehaviour <- recode(interRAI_read.df$Scale_AggressiveBehaviour,
+                                                     "0='0 (Nil)';
+                                                     c(1, 2, 3, 4)='1-4 (Mildly aggressive behaviour)';
+                                                     c(5, 6, 7, 8, 9, 10, 11, 12)='5+ (Moderate to severely aggressive behaviour)'")
+
+# Re-value Scale_Pain
+interRAI_read.df$Scale_Pain <- recode(interRAI_read.df$Scale_Pain,
+                                      "0='0 (No pain)';
+                                      c(1, 2)='1-2 (Slight daily pain)';
+                                      c(3, 4)='3-4 (Excruciating daily pain)'")
+
+# Re-value Scale_CHESS
+interRAI_read.df$Scale_CHESS <- recode(interRAI_read.df$Scale_CHESS,
+                                       "c(0, 1)='0-1 (Stable)';
+                                       c(2, 3)='2-3 (Unstable)';
+                                       c(4, 5)='4-5 (Highly unstable)'")
+
+# Re-value iF1a: participation in social activities
+interRAI_read.df$iF1a <- recode(interRAI_read.df$iF1a,
+                                "0='Never';
+                                1='>30 days ago';
+                                c(2, 3, 4)='≤30 days ago';
+                                8='Unable to determine'")
+
+# NA values in iF1a to "unable to determine"
+interRAI_read.df["iF1a"][is.na(interRAI_read.df["iF1a"])] <- "Unable to determine"
+
+# Re-value iF1b: visit with a long-standing social relation or family member
+interRAI_read.df$iF1b <- recode(interRAI_read.df$iF1b,
+                                "0='Never';
+                                1='>30 days ago';
+                                c(2, 3, 4)='≤30 days ago';
+                                8='Unable to determine'")
+
+# NA values in iF1b to "unable to determine"
+interRAI_read.df["iF1b"][is.na(interRAI_read.df["iF1b"])] <- "Unable to determine"
+
+# Re-value iF1d: says of indicates he/she feels lonely
+interRAI_read.df$iF1d <- recode(interRAI_read.df$iF1d,
+                                "0='No';
+                                1='Yes'")
+
+# Re-value iF8a: strengths - strong and supportive relationship with family
+interRAI_read.df$iF8a <- recode(interRAI_read.df$iF8a,
+                                "0='No';
+                                1='Yes'")
+
+# Re-value iF8b: strengths - consistent positive outlook
+interRAI_read.df$iF8b <- recode(interRAI_read.df$iF8b,
+                                "0='No';
+                                1='Yes'")
+# Re-value iF8c: strengths - finds meaning in day-to-day life
+interRAI_read.df$iF8c <- recode(interRAI_read.df$iF8c,
+                                "0='No';
+                                1='Yes'")
+
+# Re-value iG6a: hours of exericse (within what time frame?)
+interRAI_read.df$iG6a <- recode(interRAI_read.df$iG6a,
+                                "0='None';
+                                1='<1 hour';
+                                2='1-2 hours';
+                                3='3-4 hours';
+                                4='>4 hours'")
+
+# Re-value iG6b: days went out (within 3 days?)
+interRAI_read.df$iG6b <- recode(interRAI_read.df$iG6b,
+                                "0='No days out';
+                                1='Did not go, but usually goes out over a 3-day period';
+                                c(2, 3)='1 or more days'")
+
+# Take the final interRAI assessments of each unique individual aged between 60 to 105 (inclusive)
+# and select only the most informative columns.
+interRAI_read.df <- interRAI_read.df %>% 
+  group_by(clientkey) %>% 
+  slice(which.max(assessment_date)) %>%
+  filter(between(age, 60, 105)) %>% 
+  select(c("clientkey", "formid", "age", "gender", "Marital_Status", "Ethnicity", "assessment_date", "iJ7",
+           "Scale_ADLHierarchy", "iJ1", "Scale_CPS", "Scale_DRS", "Scale_AggressiveBehaviour", "Scale_Pain",
+           "Scale_CHESS", "iF1a", "iF1b", "iF1d", "iF8a", "iF8b", "iF8c", "iG6a", "iG6b"))
+
+# Firstly absorb the mortality data into the interRAI data
+interRAI.df <- merge(interRAI_read.df, mortality.df, by.x="clientkey", by.y="CLIENTKEY", all.x=TRUE, all.y=FALSE)
+
+# Join the covid data with the interRAI data
+interRAI.df <- merge(interRAI_read.df, covid.df, by.x="clientkey", by.y="ClientKey", all.x=TRUE, all.y=FALSE)
+
+# Merge the hospital data with the interRAI data?
