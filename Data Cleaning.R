@@ -74,7 +74,7 @@ rm(covid_case_status_read.df, covid_immunisation_read.df)
 # Hospitalisation data  ----
 
 # Read the hospitalisation data
-hospital_read.df <- read_csv("Z:/Hospitalisation data/Hospitalisation data.csv",
+Hospitalisation.df <- read_csv("Z:/Hospitalisation data/Hospitalisation data.csv",
                              col_types=cols(
                               EVENT_START_DATE=col_date("%d/%m/%Y"),
                               EVENT_END_DATE=col_date("%d/%m/%Y")
@@ -82,7 +82,33 @@ hospital_read.df <- read_csv("Z:/Hospitalisation data/Hospitalisation data.csv",
                              col_select=-OP_ACDTE)
 
 # Re-format the CLINICAL CODE column using the generic ICD-10-CM categories
-hospital_read.df$CLINICAL_CODE <- substr(hospital_read.df$CLINICAL_CODE, 1, 1)
+Hospitalisation.df$CLINICAL_CODE_a <- substring(Hospitalisation.df$CLINICAL_CODE,1,1)
+Hospitalisation.df$CLINICAL_CODE_b <- as.numeric(substring(Hospitalisation.df$CLINICAL_CODE,2,3))
+
+Hospitalisation.df <- within(Hospitalisation.df, { 
+  Disease_type <- NA 
+  Disease_type[CLINICAL_CODE_a == "A"|CLINICAL_CODE_a == "B"] <- "a_Certain infectious and parasitic diseases" 
+  Disease_type[CLINICAL_CODE_a == "C"|CLINICAL_CODE_a == "D" & CLINICAL_CODE_b <=49] <- "b_Neoplasms" 
+  Disease_type[CLINICAL_CODE_a == "D" & CLINICAL_CODE_b > 49] <- "c_Diseases of the blood and blood-forming organs and certain disorders involving the immune mechanism" 
+  Disease_type[CLINICAL_CODE_a == "E"] <- "d_Endocrine, nutritional and metabolic diseases" 
+  Disease_type[CLINICAL_CODE_a == "F"] <- "e_Mental, Behavioral and Neurodevelopmental disorders" 
+  Disease_type[CLINICAL_CODE_a == "G"] <- "f_Diseases of the nervous system" 
+  Disease_type[CLINICAL_CODE_a == "H" & CLINICAL_CODE_b <= 59] <- "g_Diseases of the eye and adnexa"
+  Disease_type[CLINICAL_CODE_a == "H" & CLINICAL_CODE_b > 59] <- "h_Diseases of the ear and mastoid process"
+  Disease_type[CLINICAL_CODE_a == "I"] <- "i_Diseases of the circulatory system" 
+  Disease_type[CLINICAL_CODE_a == "J"] <- "j_Diseases of the respiratory system" 
+  Disease_type[CLINICAL_CODE_a == "K"] <- "k_Diseases of the digestive system" 
+  Disease_type[CLINICAL_CODE_a == "L"] <- "l_ Diseases of the skin and subcutaneous tissue" 
+  Disease_type[CLINICAL_CODE_a == "M"] <- "m_Diseases of the musculoskeletal system and connective tissue" 
+  Disease_type[CLINICAL_CODE_a == "N"] <- "n_Diseases of the genitourinary system" 
+  Disease_type[CLINICAL_CODE_a == "O"] <- "o_Pregnancy, childbirth and the puerperium" 
+  Disease_type[CLINICAL_CODE_a == "Q"] <- "p_Congenital malformations, deformations and chromosomal abnormalities" 
+  Disease_type[CLINICAL_CODE_a == "R"] <- "q_Symptoms, signs and abnormal clinical and laboratory findings, not elsewhere classified" 
+  Disease_type[CLINICAL_CODE_a == "S"|CLINICAL_CODE_a == "T"] <- "r_Injury, poisoning and certain other consequences of external causes" 
+  Disease_type[CLINICAL_CODE_a == "U"] <- "s_ Emergency use of U07" 
+  Disease_type[CLINICAL_CODE_a == "Z"] <- "t_Factors influencing health status and contact with health services" 
+  
+} )
 
 # interRAI data ----
 
