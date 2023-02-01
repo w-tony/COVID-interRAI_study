@@ -19,16 +19,17 @@ mortality_uncoded_read.df <- read_csv("Z:/Mortality data/mos4269_uncoded.csv",
 # Remove duplicate CLIENTKEY identifier from the uncoded data thereby keeping only the first occurrence
 mortality_uncoded_read.df <- mortality_uncoded_read.df[!duplicated(mortality_uncoded_read.df$CLIENTKEY),]
 
-
 # Create an outer table join to fill details from the coded data
 mortality.df <- merge(mortality_uncoded_read.df, mortality_coded_read.df, 
                       by=c("CLIENTKEY", "DATE_OF_DEATH", "AGE_AT_DEATH_YRS"), all.x=TRUE)
 
-# Extract meaningful columns from the dataframe
+# Extract meaningful columns from the dataframe; only select deaths from precovid & omicron periods
 mortality.df <- mortality.df[ ,c("CLIENTKEY", "DATE_OF_DEATH", "AGE_AT_DEATH_YRS")]
+mortality_precovid.df <- subset(mortality.df, DATE_OF_DEATH >= "2018-08-16" & DATE_OF_DEATH <= "2019-08-17")
+mortality_omicron.df <- subset(mortality.df, DATE_OF_DEATH >= "2021-08-16" & DATE_OF_DEATH <= "2022-08-17")
 
 # Memory cleanup for mortality data
-rm(mortality_coded_read.df, mortality_uncoded_read.df)
+rm(mortality_coded_read.df, mortality_uncoded_read.df, mortality.df)
 
 # COVID case status and immunisation data ----
 
@@ -40,12 +41,13 @@ covid_immunisation_read.df <- read.delim("Z:/COVID-19 data/Gary Cheung COVID imm
 covid_case_status_read.df <- covid_case_status_read.df %>%
   mutate(CASE_REPORT_DT=dmy(CASE_REPORT_DT),
          INFECTION_STATUS=ifelse(is.na(INFECTION_STATUS), 0, INFECTION_STATUS)) %>%
+  filter(between(CASE_REPORT_DT, "2021-08-17", "2022-08-16")) %>%
   group_by(ClientKey) %>%
   arrange(ClientKey, CASE_REPORT_DT) %>%
   summarise(Total_infections=max(INFECTION_STATUS)) %>%
   ungroup()
 
-# Remove duplicate dates from the immunisation data [COMBINE THE NEXT 3 CHUNKS!]
+# Remove duplicate dates from the immunisation data
 covid_immunisation_read.df <- covid_immunisation_read.df %>%
   # By-group operation
   group_by(ClientKey) %>%
@@ -66,7 +68,8 @@ covid_immunisation_read.df <- covid_immunisation_read.df %>%
   ungroup()
   
 # Merge both the case statuses and immunisation data together
-covid.df <- merge(covid_case_status_read.df, covid_immunisation_read.df, "ClientKey")
+covid.df <- merge(covid_case_status_read.df, covid_immunisation_read.df, "ClientKey", all.x=FALSE, all.y=TRUE) %>%
+  mutate(Total_infections = ifelse(is.na(Total_infections), 0, Total_infections))
 
 # Memory cleanup for COVID data
 rm(covid_case_status_read.df, covid_immunisation_read.df)
@@ -110,6 +113,15 @@ Hospitalisation.df <- within(Hospitalisation.df, {
   
 } )
 
+# Split the hospitalisation periods into precovid and omicron and count number of hospitalisations
+# per individual
+Hospitalisation_precovid.df <- subset(Hospitalisation.df, EVENT_START_DATE >= "2018-08-17" & EVENT_END_DATE <= "2019-08-16") %>%
+  group_by(ClientKey) %>%
+  mutate(Total_hospitalisations = n())
+Hospitalisation_omicron.df <- subset(Hospitalisation.df, EVENT_START_DATE >= "2021-08-17" & EVENT_END_DATE <= "2022-08-16") %>%
+  group_by(ClientKey) %>%
+  mutate(Total_hospitalisations = n())
+
 # interRAI data ----
 
 # Initialise the interRAI data whilst removing the day of birth
@@ -128,10 +140,13 @@ interRAI_read.df[c("gender", "Marital_Status", "District", "Ethnicity")] <-
 interRAI_read.df$Ethnicity <- recode(interRAI_read.df$Ethnicity,
                                      "c('New Zealand European', 'Other European', 'European NFD')='European';
                                      'Maori'='Māori';
-                                     c('Samoan', 'Cook Island Maori', 'Tongan', 'Niuean', 'Tokelauan', 'Fijian', 'Other Pacific Peoples')='Pacific Peoples';
+                                     c('Samoan', 'Cook Island Maori', 'Tongan', 'Niuean', 'Tokelauan', 'Fijian', 'Other Pacific Peoples', 'Pacific Peoples NFD')='Pacific Peoples';
                                      c('Asian NFD', 'Southeast Asian', 'Chinese', 'Indian', 'Other Asian')='Asian';
                                      c('Middle Eastern', 'Latin American', 'African', 'Other Ethnicity')='Middle Eastern/Latin American/African/Others';
                                      c('Refused to Answer', 'Response Unidentifiable', 'Not stated', 'Dont Know')='Unknown'")
+
+# ...Need to remove the "unknown" ethnicity
+interRAI_read.df <- droplevels(interRAI_read.df[!interRAI_read.df$Ethnicity == "Unknown",])
 
 # Re-value the gender category.
 levels(interRAI_read.df$gender) <- c("Female", "Indeterminate", "Male", NA, "Unknown")
@@ -250,20 +265,51 @@ interRAI_read.df$iG6b <- recode(interRAI_read.df$iG6b,
                                 1='Did not go, but usually goes out over a 3-day period';
                                 c(2, 3)='1 or more days'")
 
+# Re-value iJ8a: smokes tobacco daily
+interRAI_read.df$iJ8a <- recode(interRAI_read.df$iJ8a,
+                                "0='No';
+                                c(1, 2)='Yes'")
+
 # Take the final interRAI assessments of each unique individual aged between 60 to 105 (inclusive)
 # and select only the most informative columns.
-interRAI_read.df <- interRAI_read.df %>% 
-  group_by(clientkey) %>% 
-  slice(which.max(assessment_date)) %>%
-  filter(between(age, 60, 105)) %>% 
-  select(c("clientkey", "formid", "age", "gender", "Marital_Status", "Ethnicity", "assessment_date", "iJ7",
-           "Scale_ADLHierarchy", "iJ1", "Scale_CPS", "Scale_DRS", "Scale_AggressiveBehaviour", "Scale_Pain",
-           "Scale_CHESS", "iF1a", "iF1b", "iF1d", "iF8a", "iF8b", "iF8c", "iG6a", "iG6b"))
+interRAI_read.df <- interRAI_read.df[, c("clientkey", "formid", "age", "gender", "Marital_Status", "Ethnicity", "assessment_date", "iJ7",
+                                         "Scale_ADLHierarchy", "iJ1", "Scale_CPS", "Scale_DRS", "Scale_AggressiveBehaviour", "Scale_Pain",
+                                         "Scale_CHESS", "iF1a", "iF1b", "iF1d", "iF8a", "iF8b", "iF8c", "iG6a", "iG6b", "iJ8a")] %>%
+  rename_at(vars(c("Ethnicity", "gender", "Marital_Status", "iJ7", "Scale_ADLHierarchy", "iJ1", "Scale_CPS",
+                   "Scale_DRS", "iF1d", "Scale_AggressiveBehaviour", "iF1a", "iF1b", "iF8a", "iF8b", "iF8c",
+                   "iG6a", "iG6b", "Scale_CHESS", "Scale_Pain", "iJ8a")), ~
+              c("Ethnicity_adjusted", "gender_group", "Marital_group", "self_rated_health", "ADLHierarchy_3class",
+                "Falls_2class", "CPS_3class", "DRS_3class", "loneliness", "Aggressive_3class", "Participation_days",
+                "Visit_days", "relationship_family", "positive_outlook", "Finds_meaning", "Hours_exercise",
+                "Days_went_out", "CHESS", "pain", "Smoking")) %>%
+  filter(between(age, 60, 105))
 
-# Firstly absorb the mortality data into the interRAI data
-interRAI.df <- merge(interRAI_read.df, mortality.df, by.x="clientkey", by.y="CLIENTKEY", all.x=TRUE, all.y=FALSE)
+# Split into Precovid and Omicron; select final assessments
+precovid.df <- subset(interRAI_read.df, assessment_date >= "2018-08-17" & assessment_date <= "2019-08-16") %>%
+  group_by(clientkey) %>%
+  mutate(Total_assessments = n()) %>%
+  slice(which.max(assessment_date))
+omicron.df <- subset(interRAI_read.df, assessment_date >= "2021-08-17" & assessment_date <= "2022-08-17") %>%
+  group_by(clientkey) %>%
+  mutate(Total_assessments = n()) %>%
+  slice(which.max(assessment_date))
 
-# Join the covid data with the interRAI data
-interRAI.df <- merge(interRAI_read.df, covid.df, by.x="clientkey", by.y="ClientKey", all.x=TRUE, all.y=FALSE)
+# Firstly absorb the mortality & hospitalisation data into the both the precovid data
+precovid.df <- merge(precovid.df, mortality_precovid.df, by.x="clientkey", by.y="CLIENTKEY", all.x=TRUE, all.y=FALSE)
+precovid.df <- merge(precovid.df, Hospitalisation_precovid.df, by.x="clientkey", by.y="ClientKey", all.x=TRUE, all.y=FALSE) %>%
+  mutate(Total_hospitalisations = ifelse(is.na(Total_hospitalisations), 0, Total_hospitalisations),
+         Death = ifelse(is.na(DATE_OF_DEATH), FALSE, TRUE))
 
-# Merge the hospital data with the interRAI data?
+# Merge the covid, mortality & hospitalisation data with the omicron data
+omicron.df <- merge(omicron.df, covid.df, by.x="clientkey", by.y="ClientKey", all.x=TRUE, all.y=FALSE)
+omicron.df <- merge(omicron.df, mortality_omicron.df, by.x="clientkey", by.y="CLIENTKEY", all.x=TRUE, all.y=FALSE)
+omicron.df <- merge(omicron.df, Hospitalisation_omicron.df, by.x="clientkey", by.y="ClientKey", all.x=TRUE, all.y=FALSE) %>%
+  mutate(Total_hospitalisations = ifelse(is.na(Total_hospitalisations), 0, Total_hospitalisations),
+         Death = ifelse(is.na(DATE_OF_DEATH), FALSE, TRUE))
+
+# Memory cleanup for the interRAI data
+rm(interRAI_read.df)
+
+# Save the data
+write.csv(precovid.df, "C:/Users/twu849/Documents/COVID-interRAI_study/precovid_final.csv", row.names=FALSE)
+write.csv(omicron.df, "C:/Users/twu849/Documents/COVID-interRAI_study/omicron_final.csv", row.names=FALSE)
