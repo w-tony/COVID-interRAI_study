@@ -6,7 +6,7 @@
   Table of Contents
 </h2>
 <p>
-  -<a href="#data-linkage">Data Linkage</a>
+  - <a href="#data-linkage">Data Linkage</a>
 </p>
 
 ##  Data Linkage
