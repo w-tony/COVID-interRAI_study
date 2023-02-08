@@ -1,2 +1,2 @@
-# COVID-interRAI_study
+# COVID-interRAI study
 -----------------------------------
