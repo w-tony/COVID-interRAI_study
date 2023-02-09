@@ -8,4 +8,4 @@ Delta-Omicron outbreak in aged residential care.
  - <a href="#data-linkage">Data Linkage</a>
  - Next section
 
-##  Data Linkage
+##  The Road to Data Linkage
