@@ -1,9 +1,6 @@
-library(shiny)
-
-# Load the Covid & Hospitalisation data
-
-
-# Define server logic required to draw a histogram
-shinyServer(function(input, output) {
-
+# Define server logic ----
+shinyServer(function(input, output, session) {
+  omicron.multinom = reactive({
+    
+  })
 })

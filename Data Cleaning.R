@@ -54,7 +54,7 @@ interRAI_read.df$iJ1g <- recode(interRAI_read.df$iJ1g,
                                 "0='No falls';
                                 c(1, 2)='≥1 fall'")
 
-# Coalesce the information from falls in the last 30 days (iJ1g)
+# Consolidate the information from falls in the last 30 days (iJ1g)
 # into the missing values of falls (iJ1)
 interRAI_read.df$iJ1 <- ifelse(interRAI_read.df$iJ1 == "NULL", interRAI_read.df$iJ1g, interRAI_read.df$iJ1)
 
