@@ -6,7 +6,7 @@ Delta-Omicron outbreak in aged residential care.
 
 ##  Table of Contents
 -[Participant Selection](#participant-selection)
--[Multinomial Regression] (#multinomial-regression)
+-[Multinomial Regression](#multinomial-regression)
 
 
 ##  Participant Selection
