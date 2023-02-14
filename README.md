@@ -8,8 +8,8 @@ Delta-Omicron outbreak in aged residential care.
  [Data Selection](#data selection)
  [Multinomial Regression] (#multinomial regression)
 
-<a name="data selection"/>
-##  Data Selection 
+
+##  Data Selection <a name="data selection"/>
 ![image](https://user-images.githubusercontent.com/58774448/218614249-dcf41532-39f7-46fb-bef2-76749b003251.png)
 
 ## Multinomial Regression 
