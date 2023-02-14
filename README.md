@@ -5,7 +5,8 @@ adults. This project will investigate the health and wellbeing impacts of the
 Delta-Omicron outbreak in aged residential care.
 
 ##  Table of Contents
- - <a href="#data-linkage">Data Linkage</a>
+ - <a href="#data-linkage">Data Selection</a>
  - Next section
 
-##  The Road to Data Linkage
+##  Data Selection
+
