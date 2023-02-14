@@ -9,6 +9,6 @@ Delta-Omicron outbreak in aged residential care.
  - <a href="#odds-ratio">Multinomial Regression</a>
 
 ##  Data Selection
-![participant flowchart](./src/participant_flowchart.png)
+![participant flowchart]([./src/participant_flowchart.png](https://github.com/w-tony/COVID-interRAI_study/blob/main/src/participant_flowchart.PNG))
 
 ## Multinomial Regression
