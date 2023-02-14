@@ -5,12 +5,12 @@ adults. This project will investigate the health and wellbeing impacts of the
 Delta-Omicron outbreak in aged residential care.
 
 ##  Table of Contents
- - [Data Selection](#data selection)
- - [Multinomial Regression] (#multinomial regression)
+<!--ts-->
+ * [Data Selection](#data selection)
+ * [Multinomial Regression] (#multinomial regression)
+<!--te-->
 
-<a name="data selection>
 ##  Data Selection 
 ![image](https://user-images.githubusercontent.com/58774448/218614249-dcf41532-39f7-46fb-bef2-76749b003251.png)
 
-<a name="multinomial regression>
 ## Multinomial Regression 
