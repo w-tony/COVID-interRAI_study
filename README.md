@@ -5,7 +5,7 @@ adults. This project will investigate the health and wellbeing impacts of the
 Delta-Omicron outbreak in aged residential care.
 
 ##  Table of Contents
--[Participant Selection](#participant-selection)
+-[Participant Selection](#participant-selection)  \
 -[Multinomial Regression](#multinomial-regression)
 
 
