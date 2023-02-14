@@ -1,6 +1,7 @@
 # Load libraries  ----
 library(shiny)
 library(shinydashboard)
+library(shinycssloaders)
 library(nnet)
 library(dplyr)
 
@@ -16,25 +17,13 @@ levels(precovid.df$self_rated_health) <- c("Excellent/good", "Excellent/good", "
 omicron.df$self_rated_health <- factor(omicron.df$self_rated_health, levels=c("Excellent", "Good", "Fair", "Poor", "Could not (would not) respond"))
 levels(omicron.df$self_rated_health) <- c("Excellent/good", "Excellent/good", "Fair", "Poor", "Could not (would not) respond")
 
-# Rename the columns
-rename_columns = function(dataframe) {
-  dataframe <- dataframe %>%
-    rename("Ethnicity" = "Ethnicity_adjusted",
-           "Marital status" = "Marital_group",
-           "Self-rated health" = "self_rated_health",
-           "ADL Hierarchy Scale" = "ADLHierarchy_3class",
-           "Cognitive Performance Scale" = "CPS_3class",
-           "Falls in the last 30 days" = "Falls_2class",
-           "Depressive Rating Scale" = "DRS_3class",
-           "Says or indicates that he/she feels lonely" = "loneliness")
-  return(dataframe)
-}
-precovid.df <- rename_columns(precovid.df)
-omicron.df <- rename_columns(omicron.df)
-
 # Create a vector labelling the response variables
-response_vars <- c("Self-rated health", "ADL Hierarchy Scale", "Cognitive Performance Scale",
-                   "Falls in the last 30 days", "Depressive Rating Scale", "Says or indicates that he/she feels lonely")
+response_vars <- c("self_rated_health", "ADLHierarchy_3class", "CPS_3class", "Falls_2class", 
+                   "DRS_3class", "loneliness")
+names(response_vars) <- c("Self-rated health", "ADL Hierarchy Scale", "Cognitive Performance Scale",
+                          "Falls in the last 30 days", "Depressive Rating Scale", 
+                          "Says or indicates that he/she feels lonely")
 
 # Create a vector of the possible explanatory variables
-explanatory_vars <- c("Ethnicity", "Marital status")
+explanatory_vars <- c("Ethnicity_adjusted", "Marital_group")
+names(explanatory_vars) <- c("Ethnicity", "Marital status")
