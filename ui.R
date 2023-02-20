@@ -3,18 +3,18 @@ shinydashboard::dashboardPage(
   title = "Exploring the impact of COVID-19 on the aged residential care community using interRAI data",
   
   # Define header ----
-  shinydashboard::dashboardHeader(
+  dashboardHeader(
     title = "COVID-interRAI Explorer",
     titleWidth = 300
     ),
   
   # Define sidebar: DISABLED  ----
-  shinydashboard::dashboardSidebar(
+  dashboardSidebar(
     disable = TRUE
     ),
   
   # Define body ----
-  shinydashboard::dashboardBody(
+  dashboardBody(
     fluidRow(column(width = 6, 
                     tabBox(title = "Pre-COVID Era",
                            width = NULL, 
