@@ -238,14 +238,26 @@ covid_case_status_read.df <- merge(covid_case_status_read.df, omicron.df[ ,c("cl
 
 # No duplicates in case status data; proceed to numerate through the number of recorded cases
 covid_case_status_read.df <- covid_case_status_read.df %>%
-  mutate(CASE_REPORT_DT=dmy(CASE_REPORT_DT),
-         INFECTION_STATUS=ifelse(is.na(INFECTION_STATUS), 0, INFECTION_STATUS)) %>%
-  filter(between(CASE_REPORT_DT, as.Date("2021-08-17"), as.Date("2022-08-16")),
-         CASE_REPORT_DT <= assessment_date) %>%
+  # Enable group-wise operations
   group_by(ClientKey) %>%
-  arrange(ClientKey, CASE_REPORT_DT) %>%
-  summarise(Total_infections=max(INFECTION_STATUS)) %>%
-  ungroup()
+  # Convert datatype to date-time
+  mutate(CASE_REPORT_DT=dmy(CASE_REPORT_DT),
+         # Assumption: if infection status is NA then the individual is not infected
+         INFECTION_STATUS = ifelse(is.na(INFECTION_STATUS), 0, INFECTION_STATUS),
+         # Get the total number of all-time infections
+         Total_infections=max(INFECTION_STATUS),
+         # Count the total number of infections during Omicron per individual
+         Total_omicron_infections=ifelse(
+           # Operate only on the omicron-defined period and where the case report date comes before or on the final assessment date
+           between(CASE_REPORT_DT, as.Date("2021-08-17"), as.Date("2022-08-16")) & CASE_REPORT_DT <= assessment_date,
+           # Take the maximum infection status of each individual; otherwise the individual did not have an infection
+           INFECTION_STATUS, NA),
+         # Replace NA with 0
+         Total_omicron_infections = ifelse(is.na(Total_omicron_infections), 0, Total_omicron_infections)) %>%
+  # Take one row of each individual
+  slice(which.max(Total_omicron_infections)) %>%
+  ungroup() %>%
+  select(ClientKey, Total_infections, Total_omicron_infections)
 
 # Using the same omicron data, append the same item onto the immunisation data
 covid_immunisation_read.df <- merge(covid_immunisation_read.df, omicron.df[ ,c("clientkey", "assessment_date")], by.x="ClientKey", by.y="clientkey", all.x=TRUE)
@@ -302,14 +314,14 @@ Hospitalisation.df <- within(Hospitalisation.df, {
   Disease_type[CLINICAL_CODE_a == "I"] <- "i_Diseases of the circulatory system" 
   Disease_type[CLINICAL_CODE_a == "J"] <- "j_Diseases of the respiratory system" 
   Disease_type[CLINICAL_CODE_a == "K"] <- "k_Diseases of the digestive system" 
-  Disease_type[CLINICAL_CODE_a == "L"] <- "l_ Diseases of the skin and subcutaneous tissue" 
+  Disease_type[CLINICAL_CODE_a == "L"] <- "l_Diseases of the skin and subcutaneous tissue" 
   Disease_type[CLINICAL_CODE_a == "M"] <- "m_Diseases of the musculoskeletal system and connective tissue" 
   Disease_type[CLINICAL_CODE_a == "N"] <- "n_Diseases of the genitourinary system" 
   Disease_type[CLINICAL_CODE_a == "O"] <- "o_Pregnancy, childbirth and the puerperium" 
   Disease_type[CLINICAL_CODE_a == "Q"] <- "p_Congenital malformations, deformations and chromosomal abnormalities" 
   Disease_type[CLINICAL_CODE_a == "R"] <- "q_Symptoms, signs and abnormal clinical and laboratory findings, not elsewhere classified" 
   Disease_type[CLINICAL_CODE_a == "S"|CLINICAL_CODE_a == "T"] <- "r_Injury, poisoning and certain other consequences of external causes" 
-  Disease_type[CLINICAL_CODE_a == "U"] <- "s_ Emergency use of U07" 
+  Disease_type[CLINICAL_CODE_a == "U"] <- "s_Emergency use of U07" 
   Disease_type[CLINICAL_CODE_a == "Z"] <- "t_Factors influencing health status and contact with health services" 
   
 } )
@@ -342,11 +354,23 @@ omicron.df <- merge(omicron.df, mortality_omicron.df, by.x="clientkey", by.y="CL
 omicron.df <- merge(omicron.df, Hospitalisation_omicron.df, by.x="clientkey", by.y="ClientKey", all.x=TRUE, all.y=FALSE) %>%
   mutate(Death = ifelse(is.na(DATE_OF_DEATH), FALSE, TRUE)) %>%
   mutate_at(c("Total_vaccination_doses", "Total_infections", "Total_hospitalisations"), ~replace_na(., 0))
-         
+
+# Extract some rows from after precovid and before omicron for predictions.
+predictions.df <- subset(interRAI_read.df, assessment_date >= "2019-08-17" & assessment_date <= "2021-08-16") %>%
+  group_by(clientkey) %>%
+  slice(which.max(assessment_date)) %>%
+  ungroup(clientkey) %>%
+  arrange(assessment_date)
+
+
+precovid_test.df <- head(predictions.df, n = nrow(precovid.df) * 0.10)
+omicron_test.df <- tail(predictions.df, n = nrow(omicron.df) * 0.10)
+
 # Memory cleanup for the interRAI data
-rm(covid.df, Hospitalisation_omicron.df, Hospitalisation_precovid.df, calc_mode,
-   mortality_omicron.df, omicron_late, precovid_late)
+rm(covid.df, calc_mode, mortality_omicron.df, omicron_late, precovid_late, predictions.df)
 
 # Save the data
 write.csv(precovid.df, "C:/Users/twu849/Documents/COVID-interRAI_study/precovid_final.csv", row.names=FALSE)
 write.csv(omicron.df, "C:/Users/twu849/Documents/COVID-interRAI_study/omicron_final.csv", row.names=FALSE)
+write.csv(precovid_test.df, "C:/Users/twu849/Documents/COVID-interRAI_study/precovid_test.csv", row.names=FALSE)
+write.csv(omicron_test.df, "C:/Users/twu849/Documents/COVID-interRAI_study/omicron_test.csv", row.names=FALSE)
