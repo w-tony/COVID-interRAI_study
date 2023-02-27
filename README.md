@@ -9,4 +9,3 @@ Delta-Omicron outbreak in aged residential care.
 
 
 ##  Participant Selection
-![Capture](https://user-images.githubusercontent.com/58774448/219496029-c554f8cf-0b31-4ecd-8ea3-d4d26c9fec9b.PNG)
